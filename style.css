@@ -224,6 +224,9 @@ select:hover {
   text-align: left;
   transition: transform 120ms ease, border-color 120ms ease;
   touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .day-cell:hover {

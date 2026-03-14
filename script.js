@@ -33,6 +33,7 @@
   const WEEKDAY_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
   const MOBILE_LAYOUT_MEDIA_QUERY = window.matchMedia("(max-width: 820px)");
   const MOBILE_INTERACTION_MEDIA_QUERY = window.matchMedia("(max-width: 820px), (pointer: coarse)");
+  const LONG_PRESS_DURATION_MS = 450;
 
   const state = {
     schedule: [],
@@ -46,6 +47,8 @@
     pickerDate: null,
     lastSelectedShiftType: "JOUR_7_19",
   };
+  let longPressTimer = null;
+  let longPressTriggeredDate = null;
 
   const calendarContainer = document.getElementById("calendar-container");
   const summaryContent = document.getElementById("summary-content");
@@ -102,6 +105,33 @@
 
   function isMobileInteractionMode() {
     return MOBILE_INTERACTION_MEDIA_QUERY.matches;
+  }
+
+  function clearLongPressState() {
+    if (longPressTimer) {
+      window.clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+  }
+
+  function startDayLongPress(date) {
+    if (!isMobileInteractionMode()) {
+      return;
+    }
+
+    clearLongPressState();
+    longPressTriggeredDate = null;
+    longPressTimer = window.setTimeout(() => {
+      longPressTimer = null;
+      longPressTriggeredDate = date;
+      state.selectedDate = date;
+      openShiftTypePicker(date);
+      renderAll();
+    }, LONG_PRESS_DURATION_MS);
+  }
+
+  function cancelDayLongPress() {
+    clearLongPressState();
   }
 
   function setSettingsPanelOpen(isOpen) {
@@ -493,6 +523,20 @@
 
       button.addEventListener("click", () => handleDayClick(dateString));
       button.addEventListener("dblclick", () => handleDayDoubleClick(dateString));
+      button.addEventListener("pointerdown", (event) => {
+        if (event.pointerType === "mouse") {
+          return;
+        }
+        startDayLongPress(dateString);
+      });
+      button.addEventListener("pointerup", cancelDayLongPress);
+      button.addEventListener("pointercancel", cancelDayLongPress);
+      button.addEventListener("pointerleave", cancelDayLongPress);
+      button.addEventListener("contextmenu", (event) => {
+        if (isMobileInteractionMode()) {
+          event.preventDefault();
+        }
+      });
       monthGrid.appendChild(button);
     });
 
@@ -538,12 +582,12 @@
   }
 
   function handleDayClick(date) {
-    const isRepeatedTap = isMobileInteractionMode() && state.selectedDate === date;
-    state.selectedDate = date;
-    if (isRepeatedTap) {
-      openShiftTypePicker(date);
+    if (longPressTriggeredDate === date) {
+      longPressTriggeredDate = null;
       return;
     }
+
+    state.selectedDate = date;
     renderDayDetails(date);
     renderAll();
   }
@@ -620,13 +664,13 @@
 
     if (state.removedShift) {
       statusBanner.textContent = `Jour sélectionné : ${formattedSelectedDate}. Cette date est analysée comme candidate d'échange. ${
-        isMobileInteractionMode() ? "Touche-la une seconde fois" : "Double-clique"
+        isMobileInteractionMode() ? "Laisse le doigt appuyé" : "Double-clique"
       } si tu veux finalement y saisir un poste.`;
       return;
     }
 
     statusBanner.textContent = `Jour sélectionné : ${formattedSelectedDate}. Utilise "Ajouter / modifier" ou ${
-      isMobileInteractionMode() ? "touche à nouveau ce jour" : "double-clique"
+      isMobileInteractionMode() ? "laisse le doigt appuyé sur ce jour" : "double-clique"
     } pour saisir un poste travaillé.`;
   }
 
