@@ -514,6 +514,7 @@
       const cellState = getDayCellState(dateString);
       button.type = "button";
       button.className = `day-cell state-${cellState}`;
+      button.dataset.date = dateString;
       if (state.selectedDate === dateString) {
         button.classList.add("selected-detail");
       }
@@ -570,11 +571,35 @@
   }
 
   function renderCalendar(startMonth) {
+    const monthScrollPositions = Array.from(calendarContainer.querySelectorAll(".month-card"), (monthCard) => monthCard.scrollLeft);
     calendarContainer.innerHTML = "";
     const monthStart = startMonth ? getMonthStart(startMonth) : getMonthStart(state.visibleMonthStart);
     calendarContainer.appendChild(renderMonth(monthStart.getFullYear(), monthStart.getMonth()));
     const secondMonth = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1);
     calendarContainer.appendChild(renderMonth(secondMonth.getFullYear(), secondMonth.getMonth()));
+    Array.from(calendarContainer.querySelectorAll(".month-card")).forEach((monthCard, index) => {
+      monthCard.scrollLeft = monthScrollPositions[index] || 0;
+    });
+  }
+
+  function renderSelectedDayState(previousDate, nextDate) {
+    if (previousDate) {
+      const previousButton = calendarContainer.querySelector(`.day-cell[data-date="${previousDate}"]`);
+      if (previousButton) {
+        previousButton.classList.remove("selected-detail");
+      }
+    }
+
+    if (nextDate) {
+      const nextButton = calendarContainer.querySelector(`.day-cell[data-date="${nextDate}"]`);
+      if (nextButton) {
+        nextButton.classList.add("selected-detail");
+      }
+    }
+
+    renderStatusBanner();
+    renderDetailsActions();
+    renderDayDetails(nextDate);
   }
 
   function openShiftTypePicker(date) {
@@ -617,9 +642,9 @@
       return;
     }
 
+    const previousDate = state.selectedDate;
     state.selectedDate = date;
-    renderDayDetails(date);
-    renderAll();
+    renderSelectedDayState(previousDate, date);
   }
 
   function handleDayDoubleClick(date) {
