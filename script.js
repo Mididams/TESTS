@@ -60,6 +60,7 @@
     M6: "JOUR_11_23",
     W2: "JOUR_7_19",
   };
+  const EXCEL_POST_LABEL_CODES = new Set(["N0", "M2", "M2T", "M5", "M6", "W2"]);
   const EXCEL_REST_CODES = new Set(["RH", "RC", "FE"]);
 
   const state = {
@@ -284,6 +285,16 @@
     return EXCEL_SHIFT_CODE_TO_TYPE[code] || null;
   }
 
+  function getImportedPostLabel(rawCode, rawPostLabel) {
+    const code = normalizeExcelCode(rawCode);
+    const postLabel = String(rawPostLabel || "").trim();
+    if (!postLabel || !EXCEL_POST_LABEL_CODES.has(code)) {
+      return null;
+    }
+
+    return postLabel;
+  }
+
   function findExcelRowByItemLabel(rows, startIndex, targetLabel) {
     for (let index = startIndex; index < rows.length; index += 1) {
       const row = rows[index] || [];
@@ -344,11 +355,13 @@
       if (horRowIndex === -1) {
         return;
       }
+      const posteRowIndex = findExcelRowByItemLabel(rows, horRowIndex + 1, "poste");
 
       const horRow = rows[horRowIndex] || [];
+      const posteRow = posteRowIndex === -1 ? [] : rows[posteRowIndex] || [];
       const hasDayNumbersOnCurrentRow = row.some((cell, cellIndex) => cellIndex >= 2 && parseExcelDayNumber(cell));
       const dayRow = hasDayNumbersOnCurrentRow ? row : findExcelDayHeaderRow(rows, rowIndex - 1);
-      const maxColumnCount = Math.max(dayRow.length, horRow.length);
+      const maxColumnCount = Math.max(dayRow.length, horRow.length, posteRow.length);
 
       for (let columnIndex = 2; columnIndex < maxColumnCount; columnIndex += 1) {
         const day = parseExcelDayNumber(dayRow[columnIndex]);
@@ -383,7 +396,8 @@
         }
 
         resolvedDates.add(dateString);
-        importedShiftsByDate.set(dateString, { date: dateString, shiftType });
+        const postLabel = getImportedPostLabel(rawCode, posteRow[columnIndex]);
+        importedShiftsByDate.set(dateString, postLabel ? { date: dateString, shiftType, postLabel } : { date: dateString, shiftType });
       }
     });
 
@@ -697,6 +711,9 @@
     const shift = getShiftByDate(date);
     if (shift) {
       badges.push(SHIFT_TYPE_BADGES[shift.shiftType] || shift.shiftType);
+      if (shift.postLabel && isRegularWorkedShift(shift)) {
+        badges.push(shift.postLabel);
+      }
     }
     if (state.removedShift && state.removedShift.date === date) {
       badges.push("À retirer");
@@ -1353,6 +1370,9 @@
       lines.push(`Horaire : ${escapeHtml("FO (9h-17h)")}`);
     } else if (shift) {
       lines.push(`Horaire : ${escapeHtml(SHIFT_TYPE_LABELS[shift.shiftType])}`);
+      if (shift.postLabel) {
+        lines.push(`Poste : ${escapeHtml(shift.postLabel)}`);
+      }
     }
 
     if (!state.removedShift) {
