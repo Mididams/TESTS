@@ -5,6 +5,7 @@
   }
 
   const STORAGE_KEY = "hospital-shift-exchange-v1";
+  const XLSX_IMPORT_SUPPORTED_EXTENSIONS = [".xlsx", ".xls", ".xlsm", ".xlsb", ".ods", ".fods"];
   const SHIFT_TYPE_LABELS = {
     JOUR_7_19: "7h-19h",
     NUIT_19_7: "19h-7h",
@@ -35,6 +36,31 @@
   const MOBILE_INTERACTION_MEDIA_QUERY = window.matchMedia("(max-width: 820px), (pointer: coarse)");
   const LONG_PRESS_DURATION_MS = 450;
   const DOUBLE_TAP_DURATION_MS = 320;
+  const EXCEL_MONTH_INDEX_BY_NAME = {
+    janvier: 0,
+    fevrier: 1,
+    mars: 2,
+    avril: 3,
+    mai: 4,
+    juin: 5,
+    juillet: 6,
+    aout: 7,
+    septembre: 8,
+    octobre: 9,
+    novembre: 10,
+    decembre: 11,
+  };
+  const EXCEL_SHIFT_CODE_TO_TYPE = {
+    CA: "CA",
+    FO: "FO",
+    N0: "NUIT_19_7",
+    M2: "JOUR_7_19",
+    M2T: "JOUR_7_19",
+    M5: "JOUR_10_22",
+    M6: "JOUR_11_23",
+    W2: "JOUR_7_19",
+  };
+  const EXCEL_REST_CODES = new Set(["RH", "RC", "FE"]);
 
   const state = {
     schedule: [],
@@ -72,6 +98,8 @@
   const exportButton = document.getElementById("export-button");
   const importButton = document.getElementById("import-button");
   const importFileInput = document.getElementById("import-file-input");
+  const excelImportButton = document.getElementById("excel-import-button");
+  const excelImportFileInput = document.getElementById("excel-import-file-input");
   const shiftPickerBackdrop = document.getElementById("shift-picker-backdrop");
   const shiftPickerTitle = document.getElementById("shift-picker-title");
   const shiftPickerDateLabel = document.getElementById("shift-picker-date-label");
@@ -190,6 +218,243 @@
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#39;");
+  }
+
+  function stripDiacritics(value) {
+    return String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+  }
+
+  function normalizeExcelItemLabel(value) {
+    return stripDiacritics(value)
+      .replace(/[’']/g, "")
+      .replace(/\./g, "")
+      .replace(/\s+/g, "")
+      .toLowerCase();
+  }
+
+  function normalizeExcelCode(value) {
+    return stripDiacritics(value)
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, "")
+      .trim();
+  }
+
+  function parseExcelMonthYearLabel(value) {
+    const normalized = stripDiacritics(value).toLowerCase().trim().replace(/\s+/g, " ");
+    const match = /^([a-z]+)\s+(\d{4})$/.exec(normalized);
+    if (!match) {
+      return null;
+    }
+
+    const monthIndex = EXCEL_MONTH_INDEX_BY_NAME[match[1]];
+    const year = Number(match[2]);
+    if (!Number.isInteger(monthIndex) || !Number.isInteger(year)) {
+      return null;
+    }
+
+    return { monthIndex, year };
+  }
+
+  function parseExcelDayNumber(value) {
+    if (value === null || value === undefined || value === "") {
+      return null;
+    }
+
+    const raw = String(value).trim();
+    if (!/^\d{1,2}$/.test(raw)) {
+      return null;
+    }
+
+    const day = Number(raw);
+    return day >= 1 && day <= 31 ? day : null;
+  }
+
+  function getImportedShiftTypeFromExcelCode(rawCode) {
+    const code = normalizeExcelCode(rawCode);
+    if (!code) {
+      return null;
+    }
+
+    if (EXCEL_REST_CODES.has(code)) {
+      return null;
+    }
+
+    return EXCEL_SHIFT_CODE_TO_TYPE[code] || null;
+  }
+
+  function findExcelRowByItemLabel(rows, startIndex, targetLabel) {
+    for (let index = startIndex; index < rows.length; index += 1) {
+      const row = rows[index] || [];
+      const itemLabel = normalizeExcelItemLabel(row[1]);
+      if (itemLabel === targetLabel) {
+        return index;
+      }
+
+      if (index > startIndex && parseExcelMonthYearLabel(row[0])) {
+        break;
+      }
+    }
+
+    return -1;
+  }
+
+  function findExcelDayHeaderRow(rows, startIndex) {
+    for (let index = startIndex; index >= 0; index -= 1) {
+      const row = rows[index] || [];
+      const hasDayNumbers = row.some((cell, cellIndex) => cellIndex >= 2 && parseExcelDayNumber(cell));
+      if (hasDayNumbers) {
+        return row;
+      }
+    }
+
+    return [];
+  }
+
+  function parseExcelPlanningWorkbook(workbook) {
+    if (!workbook || !Array.isArray(workbook.SheetNames) || workbook.SheetNames.length === 0) {
+      throw new Error("Le fichier Excel ne contient aucune feuille exploitable.");
+    }
+
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    const rows = window.XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "", blankrows: false });
+    const importedShiftsByDate = new Map();
+    const touchedDates = new Set();
+    const resolvedDates = new Set();
+    const unknownCodes = [];
+    let currentMonth = null;
+
+    rows.forEach((row, rowIndex) => {
+      const parsedMonth = parseExcelMonthYearLabel(row[0]);
+      if (parsedMonth) {
+        currentMonth = parsedMonth;
+      }
+
+      if (normalizeExcelItemLabel(row[1]) !== "infojour") {
+        return;
+      }
+
+      if (!currentMonth) {
+        throw new Error(`Mois introuvable avant la ligne ${rowIndex + 1}.`);
+      }
+
+      const horRowIndex = findExcelRowByItemLabel(rows, rowIndex + 1, "hor");
+      if (horRowIndex === -1) {
+        return;
+      }
+
+      const horRow = rows[horRowIndex] || [];
+      const hasDayNumbersOnCurrentRow = row.some((cell, cellIndex) => cellIndex >= 2 && parseExcelDayNumber(cell));
+      const dayRow = hasDayNumbersOnCurrentRow ? row : findExcelDayHeaderRow(rows, rowIndex - 1);
+      const maxColumnCount = Math.max(dayRow.length, horRow.length);
+
+      for (let columnIndex = 2; columnIndex < maxColumnCount; columnIndex += 1) {
+        const day = parseExcelDayNumber(dayRow[columnIndex]);
+        if (!day) {
+          continue;
+        }
+
+        const lastDayOfMonth = new Date(currentMonth.year, currentMonth.monthIndex + 1, 0).getDate();
+        if (day > lastDayOfMonth) {
+          continue;
+        }
+
+        const dateString = formatDateString(new Date(currentMonth.year, currentMonth.monthIndex, day));
+        const rawCode = horRow[columnIndex];
+        const normalizedCode = normalizeExcelCode(rawCode);
+        if (!normalizedCode) {
+          continue;
+        }
+
+        touchedDates.add(dateString);
+
+        if (EXCEL_REST_CODES.has(normalizedCode)) {
+          resolvedDates.add(dateString);
+          importedShiftsByDate.delete(dateString);
+          continue;
+        }
+
+        const shiftType = getImportedShiftTypeFromExcelCode(rawCode);
+        if (!shiftType) {
+          unknownCodes.push(`${dateString} (${rawCode || "vide"})`);
+          continue;
+        }
+
+        resolvedDates.add(dateString);
+        importedShiftsByDate.set(dateString, { date: dateString, shiftType });
+      }
+    });
+
+    if (touchedDates.size === 0) {
+      throw new Error("Structure du planning non reconnue. Les lignes 'Info. jour' / 'Hor.' sont introuvables.");
+    }
+
+    return {
+      sheetName,
+      touchedDates: Array.from(touchedDates).sort(),
+      resolvedDates: Array.from(resolvedDates).sort(),
+      schedule: engine.sortSchedule(Array.from(importedShiftsByDate.values())),
+      unknownCodes,
+    };
+  }
+
+  function applyImportedExcelPlanning(parsedPlanning) {
+    const resolvedDateSet = new Set(parsedPlanning.resolvedDates);
+    const importedWorkedDateSet = new Set(parsedPlanning.schedule.map((shift) => shift.date));
+
+    state.schedule = engine.sortSchedule([
+      ...state.schedule.filter((shift) => !resolvedDateSet.has(shift.date)),
+      ...parsedPlanning.schedule,
+    ]);
+    state.blockedRestDates = state.blockedRestDates.filter((date) => !importedWorkedDateSet.has(date));
+    state.selectedDate = null;
+
+    if (state.removedShift && resolvedDateSet.has(state.removedShift.date)) {
+      const replacementShift = state.schedule.find((shift) => shift.date === state.removedShift.date) || null;
+      state.removedShift = isExchangeableWorkedShift(replacementShift) ? replacementShift : null;
+    }
+
+    const referenceDate = parsedPlanning.schedule[0] ? parsedPlanning.schedule[0].date : parsedPlanning.resolvedDates[0];
+    if (referenceDate) {
+      state.visibleMonthStart = getMonthStart(parseDateString(referenceDate));
+    }
+
+    saveToLocalStorage();
+    computeVisibleCandidateStatuses();
+    renderAll();
+  }
+
+  async function importExcelPlanningFile(file) {
+    if (!window.XLSX) {
+      throw new Error("Le lecteur Excel n'est pas disponible dans l'application.");
+    }
+
+    const fileName = String(file.name || "").toLowerCase();
+    const hasSupportedExtension = XLSX_IMPORT_SUPPORTED_EXTENSIONS.some((extension) => fileName.endsWith(extension));
+    if (!hasSupportedExtension) {
+      throw new Error(`Format non pris en charge. Utilise ${XLSX_IMPORT_SUPPORTED_EXTENSIONS.join(", ")}.`);
+    }
+
+    const arrayBuffer = await file.arrayBuffer();
+    const workbook = window.XLSX.read(arrayBuffer, { type: "array" });
+    const parsedPlanning = parseExcelPlanningWorkbook(workbook);
+    applyImportedExcelPlanning(parsedPlanning);
+
+    const importedCount = parsedPlanning.schedule.length;
+    const unknownCount = parsedPlanning.unknownCodes.length;
+    const clearedCount = Math.max(parsedPlanning.resolvedDates.length - importedCount, 0);
+    const unknownCodesMessage =
+      unknownCount > 0
+        ? `\nCodes ignorés : ${parsedPlanning.unknownCodes.slice(0, 8).join(", ")}${
+            unknownCount > 8 ? "..." : ""
+          }`
+        : "";
+
+    window.alert(
+      `Import Excel terminé.\n${importedCount} jour(s) importé(s), ${clearedCount} jour(s) laissé(s) en repos.${unknownCodesMessage}`
+    );
   }
 
   function getMonthDateStrings(year, monthIndex) {
@@ -1353,6 +1618,25 @@
     importFileInput.value = "";
   });
 
+  excelImportButton.addEventListener("click", () => {
+    setSettingsPanelOpen(false);
+    excelImportFileInput.click();
+  });
+  excelImportFileInput.addEventListener("change", async (event) => {
+    const file = event.target.files && event.target.files[0];
+    if (!file) {
+      return;
+    }
+
+    try {
+      importFileInput.value = "";
+      await importExcelPlanningFile(file);
+    } catch (error) {
+      window.alert(`Import Excel impossible : ${error.message}`);
+    }
+    excelImportFileInput.value = "";
+  });
+
   exchangeModeInputs.forEach((input) => {
     input.addEventListener("change", (event) => {
       setExchangeMode(event.target.value);
@@ -1535,5 +1819,7 @@
     loadFromLocalStorage,
     exportData,
     importData,
+    importExcelPlanningFile,
+    parseExcelPlanningWorkbook,
   };
 })();
