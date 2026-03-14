@@ -619,6 +619,10 @@ pre {
     text-align: center;
   }
 
+  .request-shortcuts {
+    display: none;
+  }
+
   .toolbar-group-radio {
     display: grid;
     gap: 10px;
