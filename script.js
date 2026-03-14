@@ -548,10 +548,8 @@
     calendarContainer.innerHTML = "";
     const monthStart = startMonth ? getMonthStart(startMonth) : getMonthStart(state.visibleMonthStart);
     calendarContainer.appendChild(renderMonth(monthStart.getFullYear(), monthStart.getMonth()));
-    if (!isMobileLayout()) {
-      const secondMonth = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1);
-      calendarContainer.appendChild(renderMonth(secondMonth.getFullYear(), secondMonth.getMonth()));
-    }
+    const secondMonth = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1);
+    calendarContainer.appendChild(renderMonth(secondMonth.getFullYear(), secondMonth.getMonth()));
   }
 
   function openShiftTypePicker(date) {
