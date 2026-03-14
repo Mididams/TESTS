@@ -623,6 +623,10 @@ pre {
     display: none;
   }
 
+  .details-actions {
+    display: none;
+  }
+
   .toolbar-group-radio {
     display: grid;
     gap: 10px;
