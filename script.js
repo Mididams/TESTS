@@ -1243,9 +1243,15 @@
       return "";
     }
 
+    const requestMode = getRequestExchangeMode();
+
     const candidateText = candidates
       .map((candidate) => {
         const formattedShifts = candidate.allowedShiftTypes.map((shiftType) => formatRequestShiftLabel(shiftType));
+        if (requestMode === "DAY" || requestMode === "NIGHT") {
+          return formatRequestDate(candidate.date);
+        }
+
         if (formattedShifts.length === 1) {
           return `${formatRequestDate(candidate.date)} ${formattedShifts[0]}`;
         }
@@ -1255,6 +1261,14 @@
       .join(", ");
 
     const removedShiftLabel = formatRequestShiftLabel(state.removedShift.shiftType);
+    if (requestMode === "DAY") {
+      return `Bonjour, je souhaite échanger le ${formatRequestDate(state.removedShift.date)} ${removedShiftLabel} contre en jour : ${candidateText}.`;
+    }
+
+    if (requestMode === "NIGHT") {
+      return `Bonjour, je souhaite échanger le ${formatRequestDate(state.removedShift.date)} ${removedShiftLabel} contre en nuit : ${candidateText}.`;
+    }
+
     return `Bonjour, je souhaite échanger le ${formatRequestDate(state.removedShift.date)} ${removedShiftLabel} contre : ${candidateText}.`;
   }
 
