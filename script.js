@@ -422,7 +422,6 @@
     }
 
     saveToLocalStorage();
-    computeVisibleCandidateStatuses();
     renderAll();
   }
 
@@ -519,7 +518,6 @@
     }
 
     saveToLocalStorage();
-    computeVisibleCandidateStatuses();
     renderAll();
   }
 
@@ -536,7 +534,6 @@
     }
 
     saveToLocalStorage();
-    computeVisibleCandidateStatuses();
     renderAll();
   }
 
@@ -550,7 +547,6 @@
     }
 
     saveToLocalStorage();
-    computeVisibleCandidateStatuses();
     renderAll();
   }
 
@@ -563,14 +559,12 @@
     state.removedShift = { ...shift };
     state.selectedDate = date;
     saveToLocalStorage();
-    computeVisibleCandidateStatuses();
     renderAll();
   }
 
   function clearRemovedShift() {
     state.removedShift = null;
     saveToLocalStorage();
-    computeVisibleCandidateStatuses();
     renderAll();
   }
 
@@ -599,7 +593,6 @@
   function setExchangeMode(mode) {
     state.exchangeMode = mode;
     saveToLocalStorage();
-    computeVisibleCandidateStatuses();
     renderAll();
   }
 
@@ -646,11 +639,12 @@
       }
 
       const availability = engine.getCandidateAvailabilityType(state.schedule, state.removedShift, dateString, options);
+      const resultEntries = availability && availability.details
+        ? [...(availability.details.dayResults || []), ...(availability.details.nightResults || [])]
+        : [];
       const resultByShiftType = {};
-
-      EXCHANGE_SHIFT_TYPES.forEach((shiftType) => {
-        const candidateShift = { date: dateString, shiftType };
-        resultByShiftType[shiftType] = engine.isExchangeAllowed(state.schedule, state.removedShift, candidateShift, options);
+      resultEntries.forEach((entry) => {
+        resultByShiftType[entry.shiftType] = entry.result;
       });
 
       statuses[dateString] = {
@@ -1503,7 +1497,6 @@
         : "JOUR_7_19";
 
     saveToLocalStorage();
-    computeVisibleCandidateStatuses();
     renderAll();
   }
 
@@ -1518,7 +1511,6 @@
     state.visibleMonthStart = getMonthStart(new Date());
     closeShiftTypePicker();
     saveToLocalStorage();
-    computeVisibleCandidateStatuses();
     renderAll();
   }
 
