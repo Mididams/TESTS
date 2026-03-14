@@ -600,6 +600,25 @@ pre {
     justify-content: center;
   }
 
+  .settings-panel {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    top: 50%;
+    min-width: 0;
+    width: auto;
+    max-width: none;
+    padding: 14px;
+    border-radius: 20px;
+    transform: translateY(-50%);
+    z-index: 40;
+  }
+
+  .settings-panel button {
+    min-height: 44px;
+    text-align: center;
+  }
+
   .toolbar-group-radio {
     display: grid;
     gap: 10px;
