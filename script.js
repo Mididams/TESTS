@@ -31,6 +31,8 @@
   const MONTH_FORMATTER = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" });
   const REQUEST_DATE_FORMATTER = new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long" });
   const WEEKDAY_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+  const MOBILE_LAYOUT_MEDIA_QUERY = window.matchMedia("(max-width: 820px)");
+  const MOBILE_INTERACTION_MEDIA_QUERY = window.matchMedia("(max-width: 820px), (pointer: coarse)");
 
   const state = {
     schedule: [],
@@ -92,6 +94,14 @@
 
   function getMonthStart(date) {
     return new Date(date.getFullYear(), date.getMonth(), 1, 0, 0, 0, 0);
+  }
+
+  function isMobileLayout() {
+    return MOBILE_LAYOUT_MEDIA_QUERY.matches;
+  }
+
+  function isMobileInteractionMode() {
+    return MOBILE_INTERACTION_MEDIA_QUERY.matches;
   }
 
   function setSettingsPanelOpen(isOpen) {
@@ -493,9 +503,11 @@
   function renderCalendar(startMonth) {
     calendarContainer.innerHTML = "";
     const monthStart = startMonth ? getMonthStart(startMonth) : getMonthStart(state.visibleMonthStart);
-    const secondMonth = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1);
     calendarContainer.appendChild(renderMonth(monthStart.getFullYear(), monthStart.getMonth()));
-    calendarContainer.appendChild(renderMonth(secondMonth.getFullYear(), secondMonth.getMonth()));
+    if (!isMobileLayout()) {
+      const secondMonth = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1);
+      calendarContainer.appendChild(renderMonth(secondMonth.getFullYear(), secondMonth.getMonth()));
+    }
   }
 
   function openShiftTypePicker(date) {
@@ -526,7 +538,12 @@
   }
 
   function handleDayClick(date) {
+    const isRepeatedTap = isMobileInteractionMode() && state.selectedDate === date;
     state.selectedDate = date;
+    if (isRepeatedTap) {
+      openShiftTypePicker(date);
+      return;
+    }
     renderDayDetails(date);
     renderAll();
   }
@@ -602,11 +619,15 @@
     }
 
     if (state.removedShift) {
-      statusBanner.textContent = `Jour sélectionné : ${formattedSelectedDate}. Cette date est analysée comme candidate d'échange. Double-clique si tu veux finalement y saisir un poste.`;
+      statusBanner.textContent = `Jour sélectionné : ${formattedSelectedDate}. Cette date est analysée comme candidate d'échange. ${
+        isMobileInteractionMode() ? "Touche-la une seconde fois" : "Double-clique"
+      } si tu veux finalement y saisir un poste.`;
       return;
     }
 
-    statusBanner.textContent = `Jour sélectionné : ${formattedSelectedDate}. Utilise "Ajouter / modifier" ou double-clique pour saisir un poste travaillé.`;
+    statusBanner.textContent = `Jour sélectionné : ${formattedSelectedDate}. Utilise "Ajouter / modifier" ou ${
+      isMobileInteractionMode() ? "touche à nouveau ce jour" : "double-clique"
+    } pour saisir un poste travaillé.`;
   }
 
   function renderDetailsActions() {
@@ -1322,6 +1343,12 @@
       setSettingsPanelOpen(false);
     }
   });
+
+  const handleViewportChange = () => {
+    renderAll();
+  };
+  MOBILE_LAYOUT_MEDIA_QUERY.addEventListener("change", handleViewportChange);
+  MOBILE_INTERACTION_MEDIA_QUERY.addEventListener("change", handleViewportChange);
 
   populateShiftTypeSelect();
   loadFromLocalStorage();
