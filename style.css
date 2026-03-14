@@ -432,6 +432,10 @@ pre {
   display: none;
 }
 
+.settings-panel-backdrop.hidden {
+  display: none;
+}
+
 .settings-panel.hidden {
   display: none;
 }
