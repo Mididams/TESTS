@@ -34,6 +34,7 @@
   const MOBILE_LAYOUT_MEDIA_QUERY = window.matchMedia("(max-width: 820px)");
   const MOBILE_INTERACTION_MEDIA_QUERY = window.matchMedia("(max-width: 820px), (pointer: coarse)");
   const LONG_PRESS_DURATION_MS = 450;
+  const DOUBLE_TAP_DURATION_MS = 320;
 
   const state = {
     schedule: [],
@@ -49,6 +50,8 @@
   };
   let longPressTimer = null;
   let longPressTriggeredDate = null;
+  let lastTappedDate = null;
+  let lastTapTimestamp = 0;
 
   const calendarContainer = document.getElementById("calendar-container");
   const summaryContent = document.getElementById("summary-content");
@@ -132,6 +135,28 @@
 
   function cancelDayLongPress() {
     clearLongPressState();
+  }
+
+  function resetDoubleTapState() {
+    lastTappedDate = null;
+    lastTapTimestamp = 0;
+  }
+
+  function isMobileDoubleTap(date) {
+    if (!isMobileInteractionMode()) {
+      return false;
+    }
+
+    const now = Date.now();
+    const isDoubleTap = lastTappedDate === date && now - lastTapTimestamp <= DOUBLE_TAP_DURATION_MS;
+    lastTappedDate = date;
+    lastTapTimestamp = now;
+
+    if (isDoubleTap) {
+      resetDoubleTapState();
+    }
+
+    return isDoubleTap;
   }
 
   function setSettingsPanelOpen(isOpen) {
@@ -582,6 +607,13 @@
   function handleDayClick(date) {
     if (longPressTriggeredDate === date) {
       longPressTriggeredDate = null;
+      resetDoubleTapState();
+      return;
+    }
+
+    if (isMobileDoubleTap(date)) {
+      state.selectedDate = date;
+      openShiftTypePicker(date);
       return;
     }
 
@@ -591,6 +623,7 @@
   }
 
   function handleDayDoubleClick(date) {
+    resetDoubleTapState();
     state.selectedDate = date;
     openShiftTypePicker(date);
     renderAll();
@@ -662,13 +695,13 @@
 
     if (state.removedShift) {
       statusBanner.textContent = `Jour sélectionné : ${formattedSelectedDate}. Cette date est analysée comme candidate d'échange. ${
-        isMobileInteractionMode() ? "Laisse le doigt appuyé" : "Double-clique"
+        isMobileInteractionMode() ? "Double-tape ou laisse le doigt appuyé" : "Double-clique"
       } si tu veux finalement y saisir un poste.`;
       return;
     }
 
     statusBanner.textContent = `Jour sélectionné : ${formattedSelectedDate}. Utilise "Ajouter / modifier" ou ${
-      isMobileInteractionMode() ? "laisse le doigt appuyé sur ce jour" : "double-clique"
+      isMobileInteractionMode() ? "double-tape ou laisse le doigt appuyé sur ce jour" : "double-clique"
     } pour saisir un poste travaillé.`;
   }
 
