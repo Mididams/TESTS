@@ -560,6 +560,10 @@ pre {
     width: 100%;
   }
 
+  .settings-menu {
+    display: flex;
+  }
+
   .toolbar-group {
     gap: 10px;
   }
@@ -568,6 +572,14 @@ pre {
   .toolbar-group > label,
   .settings-menu > button {
     flex: 1 1 100%;
+    min-height: 44px;
+  }
+
+  .settings-menu > button {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .toolbar-group-radio {
