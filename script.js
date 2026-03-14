@@ -305,6 +305,19 @@
     renderAll();
   }
 
+  function canUsePickerRemovedAction(date, shift) {
+    const isCurrentRemovedShift = Boolean(state.removedShift && state.removedShift.date === date);
+    return isCurrentRemovedShift || isExchangeableWorkedShift(shift);
+  }
+
+  function updatePickerRemovedActionButton(date, shift) {
+    const isCurrentRemovedShift = Boolean(state.removedShift && state.removedShift.date === date);
+    selectRemovedButton.textContent = isCurrentRemovedShift
+      ? "Annuler le jour à enlever"
+      : "Choisir comme jour à échanger";
+    selectRemovedButton.disabled = !canUsePickerRemovedAction(date, shift);
+  }
+
   function setExchangeMode(mode) {
     state.exchangeMode = mode;
     saveToLocalStorage();
@@ -618,7 +631,7 @@
     blockedRestCheckbox.checked = isBlockedRest;
     shiftTypeSelect.disabled = isBlockedRest;
     deleteShiftButton.disabled = !existingShift;
-    selectRemovedButton.disabled = !isExchangeableWorkedShift(existingShift);
+    updatePickerRemovedActionButton(date, existingShift);
     shiftPickerBackdrop.classList.remove("hidden");
 
     renderDayDetails(date);
@@ -1345,6 +1358,13 @@
     if (!state.pickerDate) {
       return;
     }
+
+    if (state.removedShift && state.removedShift.date === state.pickerDate) {
+      clearRemovedShift();
+      closeShiftTypePicker();
+      return;
+    }
+
     selectRemovedShift(state.pickerDate);
     closeShiftTypePicker();
   });
