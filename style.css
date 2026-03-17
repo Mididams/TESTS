@@ -511,6 +511,15 @@ pre {
   border-color: #c36a7a;
 }
 
+.picker-checkbox-label {
+  margin-bottom: 10px;
+}
+
+.picker-secondary-button {
+  width: 100%;
+  text-align: left;
+}
+
 .modal-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

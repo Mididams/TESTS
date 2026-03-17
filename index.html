@@ -107,11 +107,38 @@
           </button>
         </div>
 
+        <div class="modal-section">
+          <label class="checkbox-label picker-checkbox-label">
+            <input id="free-note-checkbox" type="checkbox" />
+            Ajouter du texte libre
+          </label>
+          <button id="edit-free-note-button" type="button" class="picker-secondary-button" disabled>Saisir / modifier le texte</button>
+        </div>
+
         <div class="modal-actions">
           <button id="save-shift-button" type="button">Enregistrer</button>
           <button id="delete-shift-button" type="button">Supprimer le poste</button>
           <button id="select-removed-button" type="button">Choisir comme jour à échanger</button>
           <button id="close-picker-button" type="button">Fermer</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="free-note-modal-backdrop" class="modal-backdrop hidden">
+      <div class="modal-card">
+        <h2>Texte libre</h2>
+        <p id="free-note-date-label"></p>
+        <p class="modal-help">Entre un texte court pour qu'il reste lisible dans la case du calendrier.</p>
+
+        <div class="modal-section">
+          <label for="free-note-input">Texte</label>
+          <input id="free-note-input" type="text" maxlength="28" placeholder="Ex. Dentiste 13h" />
+        </div>
+
+        <div class="modal-actions">
+          <button id="save-free-note-button" type="button">Enregistrer le texte</button>
+          <button id="remove-free-note-button" type="button">Supprimer le texte</button>
+          <button id="close-free-note-button" type="button">Fermer</button>
         </div>
       </div>
     </div>
@@ -192,6 +219,7 @@
           <p>Les jours <strong>CA</strong> et <strong>FO</strong> ne sont pas échangeables. <strong>FO</strong> vaut <strong>9h-17h</strong>, <strong>CA</strong> vaut <strong>7h-19h</strong>.</p>
           <p>Les jours et nuit travaillés ainsi que les <strong>FO</strong> apparaissent en bleu hachurés. Les repos bloqués et <strong>CA</strong> en rouge (rose).</p>
           <p>Tu peux supprimer un jour entré en double-cliquant dessus, ou sur mobile avec un double tap ou un appui long, puis <strong>"Supprimer le poste"</strong>.</p>
+          <p>Dans la fenêtre <strong>"Ajouter / modifier"</strong>, tu peux aussi cocher <strong>"Ajouter du texte libre"</strong> pour noter un rendez-vous perso court, même sur un jour laissé libre ou bloqué en repos.</p>
           <p>Les données ne sont pas synchronisées entre l'ordinateur et le téléphone. Elles sont sauvegardées dans le navigateur donc si tu le nettoies (ccleaner ou autre), si tu changes d'ordinateur ou de navigateur, ou si tu cliques sur <strong>"Réinitialiser"</strong>, les données seront perdues.</p>
           <p>Tu peux créer une sauvegarde via <strong>"Paramètres / Exporter JSON"</strong>. Cela crée un fichier de sauvegarde que tu peux enregistrer pour l'importer ensuite dans un autre navigateur ou ton téléphone.</p>
           <p>Tout en haut, tu peux choisir le mode de recherche en fonction de ce que tu préfères échanger : <strong>Jour et nuit</strong>, <strong>que jour</strong>, <strong>que nuit</strong>.</p>
