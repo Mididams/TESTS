@@ -28,6 +28,10 @@
     DAY: "Jour\u00A0uniquement",
     NIGHT: "Nuit\u00A0uniquement",
   };
+  const SEARCH_VIEW_LABELS = {
+    EXCHANGE: "Echange",
+    HSP: "Heures supplementaires",
+  };
   const ROLLING_LIMIT_REASON_CODE = "TOO_MANY_WORKED_DAYS_IN_7";
   const MONTH_FORMATTER = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" });
   const REQUEST_DATE_FORMATTER = new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long" });
@@ -73,6 +77,7 @@
     schedule: [],
     removedShift: null,
     exchangeMode: "ANY",
+    searchView: "EXCHANGE",
     blockedRestDates: [],
     visibleMonthStart: getMonthStart(new Date()),
     selectedDate: null,
@@ -119,6 +124,7 @@
   const detailsEditButton = document.getElementById("details-edit-button");
   const detailsRemoveButton = document.getElementById("details-remove-button");
   const detailsSelectRemovedButton = document.getElementById("details-select-removed-button");
+  const detailsHspButton = document.getElementById("details-hsp-button");
   const detailsToggleBlockedButton = document.getElementById("details-toggle-blocked-button");
   const exchangeModeInputs = document.querySelectorAll("input[name='exchange-mode']");
   const requestModalBackdrop = document.getElementById("request-modal-backdrop");
@@ -214,6 +220,10 @@
 
   function parseDateString(dateString) {
     return engine.parseLocalDate(dateString);
+  }
+
+  function getTodayDateString() {
+    return formatDateString(new Date());
   }
 
   function addDays(dateString, days) {
@@ -579,6 +589,7 @@
     }
 
     state.removedShift = { ...shift };
+    state.searchView = "EXCHANGE";
     state.selectedDate = date;
     saveToLocalStorage();
     renderAll();
@@ -586,6 +597,7 @@
 
   function clearRemovedShift() {
     state.removedShift = null;
+    state.searchView = "EXCHANGE";
     saveToLocalStorage();
     renderAll();
   }
@@ -614,6 +626,18 @@
 
   function setExchangeMode(mode) {
     state.exchangeMode = mode;
+    saveToLocalStorage();
+    renderAll();
+  }
+
+  function isHspViewActive() {
+    return state.searchView === "HSP";
+  }
+
+  function toggleHspView() {
+    state.searchView = isHspViewActive() ? "EXCHANGE" : "HSP";
+    detailsHspButton.textContent = isHspViewActive() ? "Quitter HSP" : "HSP";
+    detailsHspButton.classList.toggle("is-active", isHspViewActive());
     saveToLocalStorage();
     renderAll();
   }
@@ -651,7 +675,7 @@
     const options = { blockedRestDates: state.blockedRestDates };
 
     getVisibleDateStrings().forEach((dateString) => {
-      if (!state.removedShift) {
+      if (!state.removedShift && !isHspViewActive()) {
         statuses[dateString] = {
           status: "NONE",
           availability: null,
@@ -660,7 +684,9 @@
         return;
       }
 
-      const availability = engine.getCandidateAvailabilityType(state.schedule, state.removedShift, dateString, options);
+      const availability = isHspViewActive()
+        ? engine.getExtraShiftAvailabilityType(state.schedule, dateString, options)
+        : engine.getCandidateAvailabilityType(state.schedule, state.removedShift, dateString, options);
       const resultEntries = availability && availability.details
         ? [...(availability.details.dayResults || []), ...(availability.details.nightResults || [])]
         : [];
@@ -699,7 +725,7 @@
     if (isBlockedRest) {
       return "blocked-rest";
     }
-    if (!state.removedShift) {
+    if (!state.removedShift && !isHspViewActive()) {
       return "empty";
     }
     if (availabilityStatus === "DAY_ONLY") {
@@ -791,7 +817,7 @@
 
   function getMiniSummaryItems(date) {
     const statusEntry = state.visibleStatuses ? state.visibleStatuses[date] : null;
-    if (!state.removedShift || !statusEntry || getShiftByDate(date) || state.blockedRestDates.includes(date)) {
+    if ((!state.removedShift && !isHspViewActive()) || !statusEntry || getShiftByDate(date) || state.blockedRestDates.includes(date)) {
       return [];
     }
 
@@ -841,12 +867,18 @@
       button.type = "button";
       button.className = `day-cell state-${cellState}`;
       button.dataset.date = dateString;
+      if (dateString === getTodayDateString()) {
+        button.classList.add("today");
+      }
       if (state.selectedDate === dateString) {
         button.classList.add("selected-detail");
       }
 
       const number = document.createElement("div");
       number.className = "day-number";
+      if (dateString === getTodayDateString()) {
+        number.classList.add("today");
+      }
       number.textContent = String(parseDateString(dateString).getDate());
       button.appendChild(number);
 
@@ -994,7 +1026,7 @@
   }
 
   function getVisiblePossibleDayCount() {
-    if (!state.removedShift || !state.visibleStatuses) {
+    if ((!state.removedShift && !isHspViewActive()) || !state.visibleStatuses) {
       return 0;
     }
 
@@ -1015,6 +1047,7 @@
         "Jour à enlever",
         state.removedShift ? `${formatDisplayDate(state.removedShift.date)} - ${SHIFT_TYPE_LABELS[state.removedShift.shiftType]}` : "Aucun",
       ],
+      ["Vue active", SEARCH_VIEW_LABELS[state.searchView] || SEARCH_VIEW_LABELS.EXCHANGE],
       ["Mode de recherche", EXCHANGE_MODE_LABELS[state.exchangeMode]],
       ["Jours possibles visibles", String(getVisiblePossibleDayCount())],
       ["Repos bloqués", String(state.blockedRestDates.length)],
@@ -1042,6 +1075,9 @@
     detailsRemoveButton.disabled = !shift;
     detailsSelectRemovedButton.disabled = !isExchangeableWorkedShift(shift);
     detailsSelectRemovedButton.textContent = date ? getRemovedActionLabel(date) : "Choisir comme jour à échanger";
+    detailsHspButton.disabled = !date;
+    detailsHspButton.textContent = isHspViewActive() ? "Quitter HSP" : "HSP";
+    detailsHspButton.classList.toggle("is-active", isHspViewActive());
     detailsToggleBlockedButton.disabled = !date || isAnnualLeave;
     detailsToggleBlockedButton.textContent = isBlocked ? "Débloquer le repos" : "Bloquer en repos";
   }
@@ -1389,7 +1425,7 @@
   }
 
   function canOpenExchangeRequest() {
-    return Boolean(state.removedShift) && getExchangeRequestCandidates().length > 0;
+    return !isHspViewActive() && Boolean(state.removedShift) && getExchangeRequestCandidates().length > 0;
   }
 
   function getRequestRangeValues() {
@@ -1559,7 +1595,7 @@
       }
     }
 
-    if (!state.removedShift) {
+    if (!state.removedShift && !isHspViewActive()) {
       lines.push("");
       lines.push(escapeHtml("Sélectionne d'abord un jour à enlever pour calculer les disponibilités."));
       dayDetailsOutput.innerHTML = lines.join("\n");
@@ -1569,6 +1605,7 @@
     const availabilityEntry = state.visibleStatuses ? state.visibleStatuses[date] : null;
     const availability = availabilityEntry ? availabilityEntry.availability : null;
     lines.push("");
+    lines.push(`Vue active\u00A0: ${escapeHtml(SEARCH_VIEW_LABELS[state.searchView] || SEARCH_VIEW_LABELS.EXCHANGE)}`);
     lines.push(`Mode actif\u00A0: ${escapeHtml(EXCHANGE_MODE_LABELS[state.exchangeMode])}`);
 
     if (availability) {
@@ -1648,6 +1685,7 @@
       schedule: state.schedule,
       removedShift: state.removedShift,
       exchangeMode: state.exchangeMode,
+      searchView: state.searchView,
       blockedRestDates: state.blockedRestDates,
       visibleMonthStart: formatDateString(state.visibleMonthStart),
       selectedDate: state.selectedDate,
@@ -1669,6 +1707,7 @@
       state.schedule = Array.isArray(parsed.schedule) ? engine.sortSchedule(parsed.schedule) : [];
       state.removedShift = isExchangeableWorkedShift(parsed.removedShift) ? parsed.removedShift : null;
       state.exchangeMode = parsed.exchangeMode || "ANY";
+      state.searchView = parsed.searchView === "HSP" ? "HSP" : "EXCHANGE";
       state.blockedRestDates = Array.isArray(parsed.blockedRestDates) ? parsed.blockedRestDates : [];
       state.visibleMonthStart = parsed.visibleMonthStart ? parseDateString(parsed.visibleMonthStart) : getMonthStart(new Date());
       state.selectedDate = parsed.selectedDate || null;
@@ -1688,6 +1727,7 @@
       schedule: state.schedule,
       removedShift: state.removedShift,
       exchangeMode: state.exchangeMode,
+      searchView: state.searchView,
       blockedRestDates: state.blockedRestDates,
       visibleMonthStart: formatDateString(state.visibleMonthStart),
       debugMode: state.debugMode,
@@ -1711,6 +1751,7 @@
     state.schedule = Array.isArray(payload.schedule) ? engine.sortSchedule(payload.schedule) : [];
     state.removedShift = isExchangeableWorkedShift(payload.removedShift) ? payload.removedShift : null;
     state.exchangeMode = payload.exchangeMode || "ANY";
+    state.searchView = payload.searchView === "HSP" ? "HSP" : "EXCHANGE";
     state.blockedRestDates = Array.isArray(payload.blockedRestDates) ? payload.blockedRestDates : [];
     state.visibleMonthStart = payload.visibleMonthStart ? parseDateString(payload.visibleMonthStart) : getMonthStart(new Date());
     state.selectedDate = null;
@@ -1728,6 +1769,7 @@
     state.schedule = [];
     state.removedShift = null;
     state.exchangeMode = "ANY";
+    state.searchView = "EXCHANGE";
     state.blockedRestDates = [];
     state.selectedDate = null;
     state.debugMode = false;
@@ -1897,7 +1939,13 @@
   });
 
   blockedRestToggleButton.addEventListener("click", () => {
-    updateBlockedRestToggleButton(!isPickerBlockedRestActive());
+    if (!state.pickerDate) {
+      return;
+    }
+
+    const nextBlockedState = !isPickerBlockedRestActive();
+    toggleBlockedRest(state.pickerDate, nextBlockedState);
+    closeShiftTypePicker();
   });
 
   closePickerButton.addEventListener("click", closeShiftTypePicker);
@@ -1984,6 +2032,13 @@
     selectRemovedShift(state.selectedDate);
   });
 
+  detailsHspButton.addEventListener("click", () => {
+    if (!state.selectedDate) {
+      return;
+    }
+    toggleHspView();
+  });
+
   detailsToggleBlockedButton.addEventListener("click", () => {
     if (!state.selectedDate) {
       return;
@@ -2040,6 +2095,7 @@
     selectRemovedShift,
     clearRemovedShift,
     setExchangeMode,
+    toggleHspView,
     computeVisibleCandidateStatuses,
     renderDayDetails,
     renderLegend,
