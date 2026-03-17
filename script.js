@@ -678,6 +678,12 @@
   }
 
   function updatePickerRemovedActionButton(date, shift) {
+    if (isHspViewActive()) {
+      selectRemovedButton.textContent = "Jour à échanger indisponible en HSP";
+      selectRemovedButton.disabled = true;
+      return;
+    }
+
     selectRemovedButton.textContent = getRemovedActionLabel(date);
     selectRemovedButton.disabled = !canUsePickerRemovedAction(date, shift);
   }
@@ -693,7 +699,11 @@
   }
 
   function toggleHspView() {
-    state.searchView = isHspViewActive() ? "EXCHANGE" : "HSP";
+    const nextIsHspView = !isHspViewActive();
+    state.searchView = nextIsHspView ? "HSP" : "EXCHANGE";
+    if (nextIsHspView) {
+      state.removedShift = null;
+    }
     detailsHspButton.textContent = isHspViewActive() ? "Quitter HSP" : "HSP";
     detailsHspButton.classList.toggle("is-active", isHspViewActive());
     saveToLocalStorage();
@@ -1152,11 +1162,16 @@
     const shift = date ? getShiftByDate(date) : null;
     const isBlocked = date ? state.blockedRestDates.includes(date) : false;
     const isAnnualLeave = isAnnualLeaveShift(shift);
+    const isHspView = isHspViewActive();
 
     detailsEditButton.disabled = !date;
     detailsRemoveButton.disabled = !shift;
-    detailsSelectRemovedButton.disabled = !isExchangeableWorkedShift(shift);
-    detailsSelectRemovedButton.textContent = date ? getRemovedActionLabel(date) : "Choisir comme jour à échanger";
+    detailsSelectRemovedButton.disabled = isHspView || !isExchangeableWorkedShift(shift);
+    detailsSelectRemovedButton.textContent = isHspView
+      ? "Jour à échanger indisponible en HSP"
+      : date
+        ? getRemovedActionLabel(date)
+        : "Choisir comme jour à échanger";
     detailsHspButton.disabled = !date;
     detailsHspButton.textContent = isHspViewActive() ? "Quitter HSP" : "HSP";
     detailsHspButton.classList.toggle("is-active", isHspViewActive());
