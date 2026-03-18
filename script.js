@@ -30,6 +30,7 @@
   };
   const SEARCH_VIEW_LABELS = {
     EXCHANGE: "Echange",
+    VERIFY: "Verification d'echange",
     HSP: "Heures supplementaires",
   };
   const ROLLING_LIMIT_REASON_CODE = "TOO_MANY_WORKED_DAYS_IN_7";
@@ -76,6 +77,7 @@
   const state = {
     schedule: [],
     removedShift: null,
+    verifyExchangeDate: null,
     exchangeMode: "ANY",
     searchView: "EXCHANGE",
     blockedRestDates: [],
@@ -132,6 +134,7 @@
   const detailsEditButton = document.getElementById("details-edit-button");
   const detailsRemoveButton = document.getElementById("details-remove-button");
   const detailsSelectRemovedButton = document.getElementById("details-select-removed-button");
+  const detailsVerifyButton = document.getElementById("details-verify-button");
   const detailsHspButton = document.getElementById("details-hsp-button");
   const detailsToggleBlockedButton = document.getElementById("details-toggle-blocked-button");
   const exchangeModeInputs = document.querySelectorAll("input[name='exchange-mode']");
@@ -147,6 +150,11 @@
   const requestModeAnyCheckbox = document.getElementById("request-mode-any-checkbox");
   const requestModeDayCheckbox = document.getElementById("request-mode-day-checkbox");
   const requestModeNightCheckbox = document.getElementById("request-mode-night-checkbox");
+  const verifyModalBackdrop = document.getElementById("verify-modal-backdrop");
+  const verifyDateInput = document.getElementById("verify-date-input");
+  const confirmVerifyButton = document.getElementById("confirm-verify-button");
+  const clearVerifyButton = document.getElementById("clear-verify-button");
+  const closeVerifyButton = document.getElementById("close-verify-button");
   const helpModalBackdrop = document.getElementById("help-modal-backdrop");
   const closeHelpButton = document.getElementById("close-help-button");
   const resetConfirmBackdrop = document.getElementById("reset-confirm-backdrop");
@@ -654,6 +662,7 @@
     }
 
     state.removedShift = { ...shift };
+    state.verifyExchangeDate = null;
     state.searchView = "EXCHANGE";
     state.selectedDate = date;
     saveToLocalStorage();
@@ -662,6 +671,33 @@
 
   function clearRemovedShift() {
     state.removedShift = null;
+    state.searchView = "EXCHANGE";
+    saveToLocalStorage();
+    renderAll();
+  }
+
+  function isVerifyViewActive() {
+    return state.searchView === "VERIFY";
+  }
+
+  function isValidDateInputValue(dateString) {
+    return /^\d{4}-\d{2}-\d{2}$/.test(String(dateString || ""));
+  }
+
+  function setVerifyExchangeDate(dateString) {
+    if (!isValidDateInputValue(dateString)) {
+      return;
+    }
+
+    state.verifyExchangeDate = dateString;
+    state.removedShift = null;
+    state.searchView = "VERIFY";
+    saveToLocalStorage();
+    renderAll();
+  }
+
+  function clearVerifyExchangeDate() {
+    state.verifyExchangeDate = null;
     state.searchView = "EXCHANGE";
     saveToLocalStorage();
     renderAll();
@@ -710,6 +746,7 @@
     state.searchView = nextIsHspView ? "HSP" : "EXCHANGE";
     if (nextIsHspView) {
       state.removedShift = null;
+      state.verifyExchangeDate = null;
     }
     detailsHspButton.textContent = isHspViewActive() ? "Quitter HSP" : "HSP";
     detailsHspButton.classList.toggle("is-active", isHspViewActive());
@@ -751,10 +788,40 @@
 
     getVisibleDateStrings().forEach((dateString) => {
       if (!state.removedShift && !isHspViewActive()) {
+        if (!isVerifyViewActive()) {
+          statuses[dateString] = {
+            status: "NONE",
+            availability: null,
+            resultByShiftType: {},
+          };
+          return;
+        }
+      }
+
+      if (isVerifyViewActive()) {
+        const shift = getShiftByDate(dateString);
+        if (!state.verifyExchangeDate || !isExchangeableWorkedShift(shift)) {
+          statuses[dateString] = {
+            status: "NONE",
+            availability: null,
+            resultByShiftType: {},
+          };
+          return;
+        }
+
+        const availability = engine.getCandidateAvailabilityType(state.schedule, shift, state.verifyExchangeDate, options);
+        const resultEntries = availability && availability.details
+          ? [...(availability.details.dayResults || []), ...(availability.details.nightResults || [])]
+          : [];
+        const resultByShiftType = {};
+        resultEntries.forEach((entry) => {
+          resultByShiftType[entry.shiftType] = entry.result;
+        });
+
         statuses[dateString] = {
-          status: "NONE",
-          availability: null,
-          resultByShiftType: {},
+          status: getModeAdjustedStatus(availability),
+          availability,
+          resultByShiftType,
         };
         return;
       }
@@ -791,6 +858,23 @@
     if (isRemoved) {
       return "removed";
     }
+    if (isVerifyViewActive()) {
+      if (!isVerifyPossibleWorkedDay(date)) {
+        return "empty";
+      }
+
+      const availabilityStatus = availabilityData ? availabilityData.status : "NONE";
+      if (availabilityStatus === "DAY_ONLY") {
+        return "day-only";
+      }
+      if (availabilityStatus === "NIGHT_ONLY") {
+        return "night-only";
+      }
+      if (availabilityStatus === "BOTH") {
+        return "both";
+      }
+      return "empty";
+    }
     if (isAnnualLeaveShift(shift)) {
       return "blocked-rest";
     }
@@ -816,6 +900,10 @@
   }
 
   function getDayCellBadges(date) {
+    if (isVerifyViewActive() && !isVerifyPossibleWorkedDay(date)) {
+      return [];
+    }
+
     const badges = [];
     const shift = getShiftByDate(date);
     if (shift) {
@@ -830,11 +918,28 @@
     if (state.blockedRestDates.includes(date)) {
       badges.push("Repos bloqué");
     }
+    if (isVerifyViewActive() && state.verifyExchangeDate && shift && isExchangeableWorkedShift(shift)) {
+      badges.push(`Echange ${formatDisplayDateShort(state.verifyExchangeDate)}`);
+    }
     const freeNote = getDayNote(date);
     if (freeNote) {
       badges.push(freeNote);
     }
     return badges;
+  }
+
+  function isVerifyPossibleWorkedDay(date) {
+    if (!isVerifyViewActive() || !state.visibleStatuses) {
+      return false;
+    }
+
+    const shift = getShiftByDate(date);
+    if (!isExchangeableWorkedShift(shift)) {
+      return false;
+    }
+
+    const statusEntry = state.visibleStatuses[date];
+    return Boolean(statusEntry && statusEntry.status !== "NONE");
   }
 
   function getWorkedDayCellTone(shift) {
@@ -904,7 +1009,15 @@
 
   function getMiniSummaryItems(date) {
     const statusEntry = state.visibleStatuses ? state.visibleStatuses[date] : null;
-    if ((!state.removedShift && !isHspViewActive()) || !statusEntry || getShiftByDate(date) || state.blockedRestDates.includes(date)) {
+    if ((!state.removedShift && !isHspViewActive() && !isVerifyViewActive()) || !statusEntry) {
+      return [];
+    }
+
+    if (isVerifyViewActive()) {
+      if (!isVerifyPossibleWorkedDay(date)) {
+        return [];
+      }
+    } else if (getShiftByDate(date) || state.blockedRestDates.includes(date)) {
       return [];
     }
 
@@ -1142,8 +1255,19 @@
   }
 
   function getVisiblePossibleDayCount() {
-    if ((!state.removedShift && !isHspViewActive()) || !state.visibleStatuses) {
+    if ((!state.removedShift && !isHspViewActive() && !isVerifyViewActive()) || !state.visibleStatuses) {
       return 0;
+    }
+
+    if (isVerifyViewActive()) {
+      return getVisibleDateStrings().filter((date) => {
+        const shift = getShiftByDate(date);
+        if (!isExchangeableWorkedShift(shift)) {
+          return false;
+        }
+        const entry = state.visibleStatuses[date];
+        return entry && entry.status !== "NONE";
+      }).length;
     }
 
     return getVisibleDateStrings().filter((date) => {
@@ -1164,8 +1288,9 @@
         state.removedShift ? `${formatDisplayDate(state.removedShift.date)} - ${SHIFT_TYPE_LABELS[state.removedShift.shiftType]}` : "Aucun",
       ],
       ["Vue active", SEARCH_VIEW_LABELS[state.searchView] || SEARCH_VIEW_LABELS.EXCHANGE],
+      ["Date à vérifier", state.verifyExchangeDate ? formatDisplayDate(state.verifyExchangeDate) : "Aucune"],
       ["Mode de recherche", EXCHANGE_MODE_LABELS[state.exchangeMode]],
-      ["Jours possibles visibles", String(getVisiblePossibleDayCount())],
+      [isVerifyViewActive() ? "Jours échangeables visibles" : "Jours possibles visibles", String(getVisiblePossibleDayCount())],
       ["Repos bloqués", String(state.blockedRestDates.length)],
       ["Congés annuels", String(state.schedule.filter(isAnnualLeaveShift).length)],
     ];
@@ -1188,6 +1313,7 @@
     const isBlocked = date ? state.blockedRestDates.includes(date) : false;
     const isAnnualLeave = isAnnualLeaveShift(shift);
     const isHspView = isHspViewActive();
+    const isVerifyView = isVerifyViewActive();
 
     detailsEditButton.disabled = !date;
     detailsRemoveButton.disabled = !shift && !hasFreeNote;
@@ -1198,6 +1324,9 @@
       : date
         ? getRemovedActionLabel(date)
         : "Choisir comme jour à échanger";
+    detailsVerifyButton.disabled = false;
+    detailsVerifyButton.textContent = isVerifyView ? "Modifier la date à vérifier" : "Vérifier un échange";
+    detailsVerifyButton.classList.toggle("is-active", isVerifyView);
     detailsHspButton.disabled = !date;
     detailsHspButton.textContent = isHspViewActive() ? "Quitter HSP" : "HSP";
     detailsHspButton.classList.toggle("is-active", isHspViewActive());
@@ -1665,6 +1794,31 @@
     requestModalBackdrop.classList.add("hidden");
   }
 
+  function openVerifyModal() {
+    verifyDateInput.value = state.verifyExchangeDate || state.selectedDate || getTodayDateString();
+    clearVerifyButton.disabled = !state.verifyExchangeDate;
+    verifyModalBackdrop.classList.remove("hidden");
+    window.setTimeout(() => {
+      verifyDateInput.focus();
+      verifyDateInput.select?.();
+    }, 0);
+  }
+
+  function closeVerifyModal() {
+    verifyModalBackdrop.classList.add("hidden");
+  }
+
+  function confirmVerifyExchangeDate() {
+    const dateString = verifyDateInput.value;
+    if (!isValidDateInputValue(dateString)) {
+      window.alert("Choisis une date valide.");
+      return;
+    }
+
+    setVerifyExchangeDate(dateString);
+    closeVerifyModal();
+  }
+
   function openHelpModal() {
     helpModalBackdrop.classList.remove("hidden");
   }
@@ -1734,7 +1888,7 @@
       lines.push(`Texte libre\u00A0: ${escapeHtml(freeNote)}`);
     }
 
-    if (!state.removedShift && !isHspViewActive()) {
+    if (!state.removedShift && !isHspViewActive() && !isVerifyViewActive()) {
       lines.push("");
       lines.push(escapeHtml("Sélectionne d'abord un jour à enlever pour calculer les disponibilités."));
       dayDetailsOutput.innerHTML = lines.join("\n");
@@ -1747,14 +1901,24 @@
     lines.push(`Vue active\u00A0: ${escapeHtml(SEARCH_VIEW_LABELS[state.searchView] || SEARCH_VIEW_LABELS.EXCHANGE)}`);
     lines.push(`Mode actif\u00A0: ${escapeHtml(EXCHANGE_MODE_LABELS[state.exchangeMode])}`);
 
+    if (isVerifyViewActive()) {
+      lines.push(`Date à vérifier\u00A0: ${escapeHtml(state.verifyExchangeDate ? formatDisplayDateWithWeekday(state.verifyExchangeDate) : "Aucune")}`);
+      if (!isExchangeableWorkedShift(shift)) {
+        lines.push("");
+        lines.push(escapeHtml("Sélectionne l'un de tes jours travaillés pour voir si la date demandée peut être échangée contre lui."));
+        dayDetailsOutput.innerHTML = lines.join("\n");
+        return;
+      }
+    }
+
     if (availability) {
       lines.push(
-        `Horaires jour autorisés\u00A0: ${escapeHtml(
+        `${escapeHtml(isVerifyViewActive() ? "Horaires jour autorisés sur la date demandée" : "Horaires jour autorisés")}\u00A0: ${escapeHtml(
           availability.allowedDayShiftTypes.map((shiftType) => SHIFT_TYPE_LABELS[shiftType] || shiftType).join(", ") || "aucun"
         )}`
       );
       lines.push(
-        `Horaires nuit autorisés\u00A0: ${escapeHtml(
+        `${escapeHtml(isVerifyViewActive() ? "Horaires nuit autorisés sur la date demandée" : "Horaires nuit autorisés")}\u00A0: ${escapeHtml(
           availability.allowedNightShiftTypes.map((shiftType) => SHIFT_TYPE_LABELS[shiftType] || shiftType).join(", ") || "aucun"
         )}`
       );
@@ -1783,7 +1947,10 @@
       lines.push("");
       const statusLabel = result.allowed ? "possible" : "impossible";
       const statusClass = result.allowed ? "detail-status-possible" : "detail-status-impossible";
-      const explanationLines = formatDetailedExplanation(result, { date, shiftType });
+      const explanationLines = formatDetailedExplanation(result, {
+        date: isVerifyViewActive() && state.verifyExchangeDate ? state.verifyExchangeDate : date,
+        shiftType,
+      });
       const isBlockedByUser =
         Array.isArray(result.reasonCodes) && result.reasonCodes.includes("CANDIDATE_DATE_BLOCKED_BY_USER");
       const hasAlreadyWorkedReason =
@@ -1823,6 +1990,7 @@
     const payload = {
       schedule: state.schedule,
       removedShift: state.removedShift,
+      verifyExchangeDate: state.verifyExchangeDate,
       exchangeMode: state.exchangeMode,
       searchView: state.searchView,
       blockedRestDates: state.blockedRestDates,
@@ -1846,8 +2014,14 @@
       const parsed = JSON.parse(raw);
       state.schedule = Array.isArray(parsed.schedule) ? engine.sortSchedule(parsed.schedule) : [];
       state.removedShift = isExchangeableWorkedShift(parsed.removedShift) ? parsed.removedShift : null;
+      state.verifyExchangeDate = isValidDateInputValue(parsed.verifyExchangeDate) ? parsed.verifyExchangeDate : null;
       state.exchangeMode = parsed.exchangeMode || "ANY";
-      state.searchView = parsed.searchView === "HSP" ? "HSP" : "EXCHANGE";
+      state.searchView =
+        parsed.searchView === "HSP"
+          ? "HSP"
+          : parsed.searchView === "VERIFY" && state.verifyExchangeDate
+            ? "VERIFY"
+            : "EXCHANGE";
       state.blockedRestDates = Array.isArray(parsed.blockedRestDates) ? parsed.blockedRestDates : [];
       state.dayNotes = sanitizeDayNotes(parsed.dayNotes);
       state.visibleMonthStart = parsed.visibleMonthStart ? parseDateString(parsed.visibleMonthStart) : getMonthStart(new Date());
@@ -1867,6 +2041,7 @@
       version: 1,
       schedule: state.schedule,
       removedShift: state.removedShift,
+      verifyExchangeDate: state.verifyExchangeDate,
       exchangeMode: state.exchangeMode,
       searchView: state.searchView,
       blockedRestDates: state.blockedRestDates,
@@ -1892,8 +2067,14 @@
 
     state.schedule = Array.isArray(payload.schedule) ? engine.sortSchedule(payload.schedule) : [];
     state.removedShift = isExchangeableWorkedShift(payload.removedShift) ? payload.removedShift : null;
+    state.verifyExchangeDate = isValidDateInputValue(payload.verifyExchangeDate) ? payload.verifyExchangeDate : null;
     state.exchangeMode = payload.exchangeMode || "ANY";
-    state.searchView = payload.searchView === "HSP" ? "HSP" : "EXCHANGE";
+    state.searchView =
+      payload.searchView === "HSP"
+        ? "HSP"
+        : payload.searchView === "VERIFY" && state.verifyExchangeDate
+          ? "VERIFY"
+          : "EXCHANGE";
     state.blockedRestDates = Array.isArray(payload.blockedRestDates) ? payload.blockedRestDates : [];
     state.dayNotes = sanitizeDayNotes(payload.dayNotes);
     state.visibleMonthStart = payload.visibleMonthStart ? parseDateString(payload.visibleMonthStart) : getMonthStart(new Date());
@@ -1911,6 +2092,7 @@
   function resetApplication() {
     state.schedule = [];
     state.removedShift = null;
+    state.verifyExchangeDate = null;
     state.exchangeMode = "ANY";
     state.searchView = "EXCHANGE";
     state.blockedRestDates = [];
@@ -2157,6 +2339,17 @@
       closeRequestModal();
     }
   });
+  confirmVerifyButton.addEventListener("click", confirmVerifyExchangeDate);
+  clearVerifyButton.addEventListener("click", () => {
+    clearVerifyExchangeDate();
+    closeVerifyModal();
+  });
+  closeVerifyButton.addEventListener("click", closeVerifyModal);
+  verifyModalBackdrop.addEventListener("click", (event) => {
+    if (event.target === verifyModalBackdrop) {
+      closeVerifyModal();
+    }
+  });
   closeHelpButton.addEventListener("click", closeHelpModal);
   helpModalBackdrop.addEventListener("click", (event) => {
     if (event.target === helpModalBackdrop) {
@@ -2211,6 +2404,10 @@
       return;
     }
     toggleHspView();
+  });
+
+  detailsVerifyButton.addEventListener("click", () => {
+    openVerifyModal();
   });
 
   detailsToggleBlockedButton.addEventListener("click", () => {
