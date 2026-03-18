@@ -627,6 +627,14 @@
     renderAll();
   }
 
+  function removeDayNote(date) {
+    if (!getDayNote(date)) {
+      return;
+    }
+
+    setDayNote(date, "");
+  }
+
   function toggleBlockedRest(dateString, shouldBlock) {
     state.blockedRestDates = shouldBlock
       ? [...new Set([...state.blockedRestDates, dateString])].sort()
@@ -830,6 +838,14 @@
     return badges;
   }
 
+  function getWorkedDayCellTone(shift) {
+    if (!shift) {
+      return "";
+    }
+
+    return shift.shiftType === "NUIT_19_7" ? "worked-night" : "worked-day";
+  }
+
   function formatDayCellBadgeLabel(label) {
     if (label.includes(":")) {
       return label.replace(":", "\n");
@@ -936,8 +952,12 @@
     getMonthDateStrings(year, month).forEach((dateString) => {
       const button = document.createElement("button");
       const cellState = getDayCellState(dateString);
+      const shift = getShiftByDate(dateString);
       button.type = "button";
       button.className = `day-cell state-${cellState}`;
+      if (cellState === "worked") {
+        button.classList.add(getWorkedDayCellTone(shift));
+      }
       button.dataset.date = dateString;
       if (dateString === getTodayDateString()) {
         button.classList.add("today");
@@ -1092,6 +1112,11 @@
     freeNoteModalBackdrop.classList.add("hidden");
   }
 
+  function closeFreeNoteAndShiftPickers() {
+    closeFreeNoteModal();
+    closeShiftTypePicker();
+  }
+
   function handleDayClick(date) {
     if (longPressTriggeredDate === date) {
       longPressTriggeredDate = null;
@@ -1160,12 +1185,14 @@
   function renderDetailsActions() {
     const date = state.selectedDate;
     const shift = date ? getShiftByDate(date) : null;
+    const hasFreeNote = Boolean(date && getDayNote(date));
     const isBlocked = date ? state.blockedRestDates.includes(date) : false;
     const isAnnualLeave = isAnnualLeaveShift(shift);
     const isHspView = isHspViewActive();
 
     detailsEditButton.disabled = !date;
-    detailsRemoveButton.disabled = !shift;
+    detailsRemoveButton.disabled = !shift && !hasFreeNote;
+    detailsRemoveButton.textContent = !shift && hasFreeNote ? "Supprimer le texte" : "Supprimer";
     detailsSelectRemovedButton.disabled = isHspView || !isExchangeableWorkedShift(shift);
     detailsSelectRemovedButton.textContent = isHspView
       ? "Jour à échanger indisponible en HSP"
@@ -1182,7 +1209,8 @@
   function renderLegend() {
     legendContent.innerHTML = "";
     const items = [
-      ["var(--color-worked)", "Jour travaillé"],
+      ["worked-day", "Jour travaillé"],
+      ["worked-night", "Nuit travaillée"],
       ["var(--color-removed)", "Jour à enlever"],
       ["var(--color-day-only)", "Possible en jour"],
       ["var(--color-night-only)", "Possible en nuit"],
@@ -1197,8 +1225,16 @@
     items.forEach(([color, label]) => {
       const row = document.createElement("div");
       row.className = "legend-line";
-      const swatchClass = label === "Jour travaillé" ? "legend-swatch legend-swatch-worked" : "legend-swatch";
-      row.innerHTML = `<span class="${swatchClass}" style="background:${color}"></span><span>${label}</span>`;
+      let swatchClass = "legend-swatch";
+      let swatchStyle = `background:${color}`;
+      if (color === "worked-day") {
+        swatchClass = "legend-swatch legend-swatch-worked legend-swatch-worked-day";
+        swatchStyle = "";
+      } else if (color === "worked-night") {
+        swatchClass = "legend-swatch legend-swatch-worked legend-swatch-worked-night";
+        swatchStyle = "";
+      }
+      row.innerHTML = `<span class="${swatchClass}"${swatchStyle ? ` style="${swatchStyle}"` : ""}></span><span>${label}</span>`;
       list.appendChild(row);
     });
     legendContent.appendChild(list);
@@ -2151,7 +2187,12 @@
     if (!state.selectedDate) {
       return;
     }
-    removeWorkedShift(state.selectedDate);
+    if (getShiftByDate(state.selectedDate)) {
+      removeWorkedShift(state.selectedDate);
+      return;
+    }
+
+    removeDayNote(state.selectedDate);
   });
 
   detailsSelectRemovedButton.addEventListener("click", () => {
@@ -2182,7 +2223,7 @@
     }
 
     setDayNote(state.pickerDate, freeNoteInput.value);
-    closeFreeNoteModal();
+    closeFreeNoteAndShiftPickers();
   });
 
   removeFreeNoteButton.addEventListener("click", () => {
