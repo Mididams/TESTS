@@ -125,6 +125,7 @@
   const editFreeNoteButton = document.getElementById("edit-free-note-button");
   const saveShiftButton = document.getElementById("save-shift-button");
   const deleteShiftButton = document.getElementById("delete-shift-button");
+  const pickerVerifyButton = document.getElementById("picker-verify-button");
   const selectRemovedButton = document.getElementById("select-removed-button");
   const closePickerButton = document.getElementById("close-picker-button");
   const freeNoteModalBackdrop = document.getElementById("free-note-modal-backdrop");
@@ -2082,8 +2083,8 @@
     requestModalBackdrop.classList.add("hidden");
   }
 
-  function openVerifyModal() {
-    verifyDateInput.value = state.verifyExchangeDate || state.selectedDate || getTodayDateString();
+  function openVerifyModal(prefilledDate = null) {
+    verifyDateInput.value = prefilledDate || state.verifyExchangeDate || state.selectedDate || getTodayDateString();
     const selectedShiftTypes = new Set(getSelectedVerifyShiftTypes());
     verify719Checkbox.checked = selectedShiftTypes.has("JOUR_7_19");
     verify1022Checkbox.checked = selectedShiftTypes.has("JOUR_10_22");
@@ -2569,6 +2570,15 @@
     }
     removeWorkedShift(state.pickerDate);
     closeShiftTypePicker();
+  });
+
+  pickerVerifyButton.addEventListener("click", () => {
+    if (!state.pickerDate) {
+      return;
+    }
+    const pickerDate = state.pickerDate;
+    closeShiftTypePicker();
+    openVerifyModal(pickerDate);
   });
 
   selectRemovedButton.addEventListener("click", () => {
