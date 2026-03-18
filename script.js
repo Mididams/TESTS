@@ -101,7 +101,6 @@
   const prevMonthButton = document.getElementById("prev-month-button");
   const nextMonthButton = document.getElementById("next-month-button");
   const requestExchangeButton = document.getElementById("request-exchange-button");
-  const clearRemovedButton = document.getElementById("clear-removed-button");
   const settingsButton = document.getElementById("settings-button");
   const settingsPanelBackdrop = document.getElementById("settings-panel-backdrop");
   const settingsPanel = document.getElementById("settings-panel");
@@ -675,7 +674,7 @@
 
   function getRemovedActionLabel(date) {
     if (state.removedShift && state.removedShift.date === date) {
-      return "Annuler le jour à enlever";
+      return "Annuler le jour à échanger";
     }
 
     if (state.removedShift) {
@@ -1971,7 +1970,6 @@
 
   helpButton.addEventListener("click", openHelpModal);
   requestExchangeButton.addEventListener("click", openRequestModal);
-  clearRemovedButton.addEventListener("click", clearRemovedShift);
 
   settingsButton.addEventListener("click", (event) => {
     event.stopPropagation();
@@ -2199,6 +2197,12 @@
     if (!state.selectedDate) {
       return;
     }
+
+    if (state.removedShift && state.removedShift.date === state.selectedDate) {
+      clearRemovedShift();
+      return;
+    }
+
     selectRemovedShift(state.selectedDate);
   });
 
