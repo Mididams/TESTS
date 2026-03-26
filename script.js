@@ -1126,13 +1126,20 @@
   }
 
   function formatDayCellBadgeLabel(label) {
-    if (label.includes(":")) {
-      return label.replace(":", "\n");
+    if (label === "Repos bloqué") {
+      return "Repos\nbloqué";
     }
 
-    if (label.includes(" ")) {
-      const parts = label.split(" ");
-      return `${parts.slice(0, -1).join(" ")}\n${parts[parts.length - 1]}`;
+    if (label === "A retirer") {
+      return "A\nretirer";
+    }
+
+    if (label === "A rajouter") {
+      return "A\nrajouter";
+    }
+
+    if (label.includes(":")) {
+      return label.replace(":", "\n");
     }
 
     return label;
