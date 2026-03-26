@@ -321,6 +321,25 @@ select:hover {
   background: var(--color-none);
 }
 
+.day-cell.state-hsp-past {
+  background: white;
+  border-color: var(--color-border);
+}
+
+.day-cell.hsp-past {
+  cursor: default;
+}
+
+.day-cell.hsp-past:hover {
+  transform: none;
+  border-color: var(--color-border);
+}
+
+.day-cell.hsp-past:disabled {
+  opacity: 1;
+  color: inherit;
+}
+
 .day-cell.state-blocked-rest {
   background: var(--color-blocked-rest);
 }

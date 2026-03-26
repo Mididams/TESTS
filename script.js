@@ -252,6 +252,14 @@
     return formatDateString(new Date());
   }
 
+  function isPastDate(dateString) {
+    return dateString < getTodayDateString();
+  }
+
+  function shouldBlankPastDayInHspView(dateString) {
+    return isHspViewActive() && isPastDate(dateString);
+  }
+
   function addDays(dateString, days) {
     return engine.addDays(dateString, days);
   }
@@ -999,6 +1007,9 @@
     if (isVerifyRequestedDate) {
       return "worked";
     }
+    if (shouldBlankPastDayInHspView(date)) {
+      return "hsp-past";
+    }
     if (isVerifyViewActive()) {
       return isVerifyPossibleWorkedDay(date) ? "worked" : "empty";
     }
@@ -1027,6 +1038,10 @@
   }
 
   function getDayCellBadges(date) {
+    if (shouldBlankPastDayInHspView(date)) {
+      return [];
+    }
+
     if (isVerifyViewActive() && !isVerifyPossibleWorkedDay(date) && !isVerifyRequestedDate(date)) {
       return [];
     }
@@ -1172,6 +1187,10 @@
   }
 
   function getMiniSummaryItems(date) {
+    if (shouldBlankPastDayInHspView(date)) {
+      return [];
+    }
+
     const statusEntry = state.visibleStatuses ? state.visibleStatuses[date] : null;
     if ((!state.removedShift && !isHspViewActive() && !isVerifyViewActive()) || !statusEntry) {
       return [];
@@ -1233,6 +1252,10 @@
       const shift = getShiftByDate(dateString);
       button.type = "button";
       button.className = `day-cell state-${cellState}`;
+      if (cellState === "hsp-past") {
+        button.classList.add("hsp-past");
+        button.disabled = true;
+      }
       if (cellState === "worked") {
         if (isVerifyRequestedDate(dateString) && !shift) {
           button.classList.add(getVerifyRequestedDayCellTone());
@@ -1247,7 +1270,7 @@
       if (isVerifyRequestedDate(dateString)) {
         button.classList.add("verify-requested");
       }
-      if (state.selectedDate === dateString) {
+      if (state.selectedDate === dateString && cellState !== "hsp-past") {
         button.classList.add("selected-detail");
       }
 
@@ -1444,6 +1467,9 @@
     }
 
     return getVisibleDateStrings().filter((date) => {
+      if (shouldBlankPastDayInHspView(date)) {
+        return false;
+      }
       if (getShiftByDate(date) || (state.removedShift && date === state.removedShift.date) || state.blockedRestDates.includes(date)) {
         return false;
       }
