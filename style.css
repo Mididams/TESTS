@@ -557,9 +557,28 @@ input[type="checkbox"] {
 }
 
 .details-actions button.is-active {
-  background: var(--color-both);
+  background: linear-gradient(180deg, #f6fff2 0%, #def3d4 100%);
   border-color: #7cb269;
-  box-shadow: 0 10px 22px rgba(124, 178, 105, 0.18);
+  color: #224b24;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 10px 22px rgba(124, 178, 105, 0.22);
+  font-weight: 700;
+}
+
+.details-actions button.is-active:hover {
+  border-color: #689a58;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 12px 24px rgba(124, 178, 105, 0.28);
+}
+
+#details-select-removed-button.is-active,
+#details-verify-button.is-active,
+#details-hsp-button.is-active {
+  background: linear-gradient(180deg, #f6fff2 0%, #def3d4 100%);
+  border-color: #7cb269;
+  color: #224b24;
 }
 
 .summary-list,

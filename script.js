@@ -1513,6 +1513,7 @@
     const isAnnualLeave = isAnnualLeaveShift(shift);
     const isHspView = isHspViewActive();
     const isVerifyView = isVerifyViewActive();
+    const hasRemovedShift = Boolean(state.removedShift);
 
     detailsEditButton.disabled = !date;
     detailsRemoveButton.disabled = !shift && !hasFreeNote;
@@ -1523,6 +1524,7 @@
       : date
         ? getRemovedActionLabel(date)
         : "Choisir comme jour à échanger";
+    detailsSelectRemovedButton.classList.toggle("is-active", hasRemovedShift);
     detailsVerifyButton.disabled = false;
     detailsVerifyButton.textContent = isVerifyView ? "Modifier la date à vérifier" : "Vérifier un échange";
     detailsVerifyButton.classList.toggle("is-active", isVerifyView);
